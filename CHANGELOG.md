@@ -1,5 +1,46 @@
 # 更新日志
 
+## v58（文档修订，2026-11-24）
+
+- 统一中文主 README 与英、繁中、日、韩、葡六语文档的国际版任务口径：默认只读核对，只有 `--experimental-intl-tasks` 才尝试执行 `first_chat / skill_installed / expert_summoned / template_used`。
+- 明确事件被服务端接收不等于任务完成或积分结算，避免文档把实验能力描述成默认可自动完成。
+- 脚本版本保持 `v3.55`，业务逻辑未变更。
+
+## v3.55（Release v57，2026-11-24）
+
+- 修复 Issue #64：国际版官方 provider 明确 `growth:false`、`tasks.list=[]`、`tasks.run=501`，不存在等级任务结算协议；不再把国内成长中心事件硬套到国际版。
+- 国际版等级任务默认只读：服务端已 `completed/claimed` 时仍可领奖，`available` 状态只报告上游未开放自动任务事件，不再执行伪动作或打印“动作已成功”。
+- 保留 `--experimental-intl-tasks` 仅用于抓包/回归实验，并在帮助与文档中明确事件成功不等于任务完成或积分到账。
+- `report_growth_events()` 只接受明确的 `code=0`，不再把 HTTP 200 + `code=None` 当作任务事件成功。
+- 新增国际版积分前后回读：调用 `get-user-resource-summary` 汇总 `CycleRemainCapacity`，报告操作前后余额与差值；积分不变时明确显示“本轮无变化”。
+- `claim_daily()` 解析 `data.credit` 与 `credit_delayed`；活动关闭时不再声称“积分由上游异步发放”，只报告活跃链路已更新、积分未确认。
+- 新增只读任务、明确事件码、积分汇总、延迟入账与活动关闭文案回归；全套 `233` 项测试通过。
+
+## v3.54（Release v56，2026-11-24）
+
+- 修复 Issue #63：国际版等级任务的 `/console/chat/completions` 请求缺少首条 system message，服务端返回 `HTTP 400 / code=11-128 / first message is not system prompt`。
+- `web_task_conversation_session()` 与 `keepalive()` 现在共用 `SYSTEM_PROMPT`，任务请求固定为 `system → user` 两段消息。
+- 新增网页任务消息结构回归，防止后续只发送 user message 导致四项等级任务再次全灭。
+- 任务完成仍以服务端 `completed / claimed` 回读为准，不以 HTTP 200 或事件上报冒充成功。
+
+## v3.53（Release v55，2026-11-24）
+
+- 修复国际版等级任务真实对话：任务会话改走 `/console/webchat/conversations`，不再把每日活跃使用的 `/console/as/conversations/` 会话 ID 直接交给 `/console/chat/completions`。
+- 对齐国际版网页对话请求头：根路径 Referer、`X-Requested-With`、`X-CodeBuddy-Request`、`X-Product` 与英文语言头。
+- `/console/chat/completions` 非 200 时带出脱敏后的服务端 `code / msg / text[:200]`，不再只显示 HTTP 400。
+- 修复 `template_used` 场景表：改用公开的 `/v2/as/support/scenes?locale=en`；旧 `en-US` 返回空列表，导致稳定报“场景表未返回可用模板”。
+- 主脚本积分查询新增 `get-user-resource` 到期明细：月度套餐显示月底清零，活动赠送积分显示逐笔到期时间；结果同步到账号日志和推送摘要。
+- 新增任务会话路径、400 响应体透出、英文场景表、积分到期解析与查询集成回归；任务完成仍以服务端状态回读为准。
+
+## v3.52（Release v54，2026-11-23）
+
+- 国际版 `workbuddy_intl_daily.py` 新增 5 项等级任务适配：`first_chat`、`skill_installed`、`wechat_linked`、`expert_summoned`、`template_used`。
+- 任务列表同时读取 `/activity/growth/tasks` 与 `/v2/activity/growth/tasks`，兼容等级族的 `code/status` 和成长族的 `task_code/accept_status` 两套字段。
+- `first_chat`、`expert_summoned`、`template_used`、`skill_installed` 均先执行真实网页会话或技能安装，再上报对应判据；只有服务端回读 `completed` 或 `claimed` 才进入领奖，HTTP 200 或事件上报成功不算完成。
+- `wechat_linked` 只检测任务状态并提示在官方客户端绑定微信，不发送伪造事件、不领奖。
+- 新增 `--no-tasks`，可在只跑每日活跃时跳过国际版等级任务；`--report-only` 继续保证零任务写操作。
+- 补齐三源任务合并、真实 SSE 会话/消息 ID、等级与桌面分头、技能安装回读、事件信封、未完成不领奖和已领奖回读测试；全套 `224` 项测试通过。
+
 ## 登录工具 v2.1（Release v53，2026-11-19）
 
 - 登录成功后先校验 AT/RT 的 JWT 三段结构、`typ` 与国内 WorkBuddy 签发域；RT 不是合法 JWT 时拒绝生成 `手机号:AT:RT` 行，也不写入 `wb_login_result.json`。

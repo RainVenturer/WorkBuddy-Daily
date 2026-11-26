@@ -4,13 +4,13 @@
 
 # 🌱 WorkBuddy Daily
 
-**WorkBuddy 成长中心 · 全能签到脚本 · 单文件自包含（含国际版每日活跃）**
+**WorkBuddy 成长中心 · 全能签到脚本 · 单文件自包含（含国际版每日活跃与只读任务状态）**
 
-> 当前版本：**v53**（2026-11-19） · 最新更新：登录工具输出前校验 AT/RT 结构，坏 RT 不再写入环境变量
+> 当前版本：**v58**（2026-11-24） · 最新更新：统一六语文档中的国际版任务口径，默认只读核对，实验开关才尝试执行且不保证结算
 
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
-🔐 Token 永续 · ✅ 45 项自动化 · 📱 小程序链式任务 · 🖥️ 桌面换血 · 🎮 8 项玩法 · 💰 三类查询 · 🎁 自动领奖 · 📊 全中文报告 · 📢 多渠道推送 · 🐧 青龙友好 · ☁️ GitHub Actions
+🔐 Token 永续 · ✅ 国内 45 项自动化 · 🌍 国际版每日活跃 · 📱 小程序链式任务 · 🖥️ 桌面换血 · 🎮 8 项玩法 · 💰 三类查询 · 🎁 自动领奖 · 📊 全中文报告 · 📢 多渠道推送 · 🐧 青龙友好 · ☁️ GitHub Actions
 
 <img src="https://img.shields.io/github/v/release/L0NE-6/WorkBuddy-Daily?style=for-the-badge&label=Release&color=2ea44f&logo=github" />
 <img src="https://img.shields.io/github/stars/L0NE-6/WorkBuddy-Daily?style=for-the-badge&label=Stars&color=FFC75F&logo=github" />
@@ -46,7 +46,7 @@
 
 | 维度 | 说明 |
 | :--- | :--- |
-| **做什么** | 自动完成 WorkBuddy 国内版签到、成长任务、小程序链式任务、互动玩法与奖励回读；国际版独立完成每日活跃链。 |
+| **做什么** | 自动完成 WorkBuddy 国内版签到、成长任务、小程序链式任务、互动玩法与奖励回读；国际版完成每日活跃链并只读核对等级任务。 |
 | **输入** | 国内版 `WORKBUDDY_REFRESH_TOKEN`，国际版 `WORKBUDDY_INTL_TOKENS`；可选配置推送渠道与任务白/黑名单。 |
 | **输出** | 中文分账号报告、积分前后差值、任务/签到/活跃状态、待办分布和多渠道推送。 |
 | **部署** | 青龙面板、GitHub Actions、Windows / Linux 本地运行。 |
@@ -70,7 +70,7 @@
 ---
 
 
-## 🌍 国际版每日活跃（workbuddy.ai）
+## 🌍 国际版每日活跃与任务状态（workbuddy.ai）
 
 国际版的每日奖励不是普通签到，而是一条**活跃任务**链，单独一个脚本：
 
@@ -80,11 +80,21 @@
    - **活跃上报** `POST /v2/report` → 点亮成长中心的「连登」（并回读连登天数）；
    - **保活对话** `POST /v2/chat/completions` → 维持「账号有调用」（免费模型，不消耗积分）；
    - **网页会话** `POST /console/as/conversations/` → 上游「当日活跃」计数只认这一发。
+4. 等级任务（默认只读）：
+   - 国际版官方 provider 明确为 `growth:false`，没有等级任务结算协议；
+   - 脚本只读取任务状态，服务端已 `completed/claimed` 时才处理领奖；
+   - 不再把国内成长中心事件硬套到国际版，也不再打印“动作已执行”冒充完成；
+   - `--experimental-intl-tasks` 仅保留给抓包/回归实验，事件成功不代表任务完成或积分到账。
+5. 积分回读：
+   - 每轮读取 `get-user-resource-summary` 的剩余积分合计；
+   - 报告操作前后余额，只有余额增长或明确领取回执才写积分到账。
 
 ```bash
 python workbuddy_intl_daily.py                      # 探测 + 领取 + 活跃（上报 / 保活 / 网页会话）
-python workbuddy_intl_daily.py --no-keepalive       # 只探测、领取与上报，不发保活对话与网页会话
+python workbuddy_intl_daily.py --no-keepalive       # 只探测、领取与上报；跳过保活、网页会话及依赖网页对话的等级任务
 python workbuddy_intl_daily.py --report-only        # 只做 /v2/report 活跃上报，不探测/领取任务或奖励
+python workbuddy_intl_daily.py --no-tasks           # 跳过 5 项国际版等级任务
+python workbuddy_intl_daily.py --experimental-intl-tasks  # 仅抓包实验，不保证结算
 python workbuddy_intl_daily.py --only 1             # 只跑第一个账号
 ```
 
@@ -102,7 +112,10 @@ python workbuddy_intl_daily.py --only 1             # 只跑第一个账号
 > ℹ️ 保活对话出现 `HTTP 403` 通常是当前免费模型无权限，**不是账号风控**；真正的账号受限以 `11140 / request illegal` 为准，预检会直接报「账号受限」。
 > 带上 `refresh_token` 时脚本会自动续期，并通过线程锁 + 跨进程文件锁、锁内 CAS 与原子替换写回 `wb_intl_tokens.json`；只给 AT 时按短期令牌使用。
 > 活动未开放属于正常状态，不会当成失败；签到成功与活跃结果分开报告，任一发失败都不会把签到判成失败。
-> 活动未开启但活跃上报 / 网页会话成功时，会按「今日活跃已完成」报告（积分由上游异步发放）。
+> 活动未开启时只报告“活跃链路已更新，未调用每日签到，积分未确认”，不再声称积分会异步发放。
+> 国际版等级任务默认只读；官方 provider 标记 `growth:false`，没有可验证的等级任务事件协议。只有 `--experimental-intl-tasks` 才会发送国内成长事件，且不保证结算。
+> 所有账号都会回读操作前后积分余额；积分没有变化时会明确显示“本轮无变化”。
+> 若某个任务只在小程序口径下发，脚本会识别但不会伪造小程序事件；这类任务需等对应 MP 协议验证后再自动执行。
 
 ## 🚀 部署方式一：青龙面板（三步）
 
@@ -325,7 +338,9 @@ python workbuddy_daily.py --mp-gap 15    # mp 对话事件间隔（默认 45s，
 
 ## 🧰 可选工具
 
-### 💰 积分到期报告（credits_report.py）
+### 💰 积分到期报告（主脚本内置 + credits_report.py）
+
+主脚本的积分查询会自动读取 `get-user-resource` 的 `Accounts`，在余额行下直接显示月度套餐清零和活动赠送积分到期时间；`credits_report.py` 仍可用于独立推送和更长窗口报告。
 
 显示余额组成与每笔积分的到期时间（月度套餐月底清零、活动赠送 30 天逐笔到期），支持 Bark / WxPusher 推送：
 
@@ -414,6 +429,24 @@ python daily_forward.py daily.log --wx
 
 ---
 
+## 🧭 任务结果语义
+
+WorkBuddy 的任务和活动使用多种服务端状态，脚本统一按以下语义输出：
+
+| 结果语义 | 含义 |
+| :--- | :--- |
+| `CLAIMED` / 已领取 | 本轮完成领取，并有回执或后态证据 |
+| `ALREADY` / 已完成 | 运行前或运行中确认任务已结算 |
+| `PENDING` / 可领取 | 服务端明确任务可执行或奖励可领取 |
+| `INACTIVE` / 未下发 | 当前账号没有该任务或活动未开启 |
+| `AUTH_EXPIRED` | Token、Cookie 或账号登录态失效 |
+| `MANUAL_REQUIRED` | 关注公众号、微信绑定、扫码等必须人工完成 |
+| `FAILED` | 业务失败、HTTP 失败、回读未确认或异常 |
+
+任务快照中的“已完成/已领奖”属于中性跳过；只有服务端回执、状态翻转、余额变化或任务详情回读才能证明本轮成功。
+
+---
+
 ## 📦 任务清单
 
 > 单账号每轮按服务端下发逐项核对：**当前为 25 项 = 24 项自动 + 1 项需人工（关注公众号）**；脚本覆盖能力共 **45 项**（云端 23 + 小程序 7 + PC 灵感 1 + 互动玩法 8 + 每日签到 1 + 小程序活动 6）。
@@ -455,7 +488,7 @@ python daily_forward.py daily.log --wx
 >
 > ⏳ **任务有效期**：部分任务由服务端下发 `valid_start` / `valid_end`（例如 `Buddy_App_QQ` 至 **2026-10-10**、`Hp_Appearance` 至 2026-11-02、`Expert_lighthouse` 至 2026-11-13、四个 `expert_use_*` 至 **2026-11-20**），过期后不再能领取。脚本每次运行会读取任务行并做两件事：`locked=true`（未到上线时间）直接跳过并给出解锁日；最终补领后按**终态未完成/未领奖**（不含 `claimed`、`claimed=true` 和本轮已确认领奖回执）检查 7 天内到期 / 已过期任务并打印 ⏰ 提醒，避免用开跑前快照误报。
 >
-> 🔎 **三源任务发现**：桌面 `/v2/activity/growth/tasks`、小程序 `/v2`、等级族无 `/v2` 的 `/activity/growth/tasks` 并不互为超集。脚本每次合并三套清单；`first_chat / skill_installed / wechat_linked / expert_summoned / template_used` 只发现和分类，其中微信绑定明确标记为客户端操作。
+> 🔎 **三源任务发现**：桌面 `/v2/activity/growth/tasks`、小程序 `/v2`、等级族无 `/v2` 的 `/activity/growth/tasks` 并不互为超集。国内版主脚本仍负责三源发现与分类；国际版 `workbuddy_intl_daily.py` 默认只读发现并核对等级任务，只有 `--experimental-intl-tasks` 才会尝试执行 `first_chat / skill_installed / expert_summoned / template_used` 并回读，事件成功不代表结算；`wechat_linked` 始终标记为客户端操作。
 
 ### 📦 已归档（不占主脚本）
 
@@ -605,6 +638,19 @@ python daily_forward.py daily.log --wx
 
 ---
 
+## 🧠 设计原则
+
+- **任务快照先行**：先读取账号任务和活动状态，再决定执行与领取；
+- **服务端回读**：签到、任务、积分、能量、抽奖和兑换均以后态为准；
+- **幂等优先**：已完成任务不重复提交，已领取奖励不重复 claim；
+- **账号隔离**：多账号独立 Session、独立任务状态和错误边界；
+- **人工任务单列**：公众号、微信绑定、扫码等不伪装自动化成功；
+- **凭据永续**：支持 Token 刷新与本地状态持久化，但不把凭据写入日志；
+- **诚实报告**：未下发、跳过、人工、失败、回读未确认分别展示；
+- **最小依赖**：青龙只需上传脚本并安装必要依赖。
+
+---
+
 ## ⚙️ 特别之处
 
 - **📦 单文件自包含**：专家市场数据、PushPlus 推送全部内置，**无需任何外部模块**，部署零负担
@@ -676,7 +722,7 @@ WorkBuddy-Daily/
 │       └── workbuddy.yml        # GitHub Actions 定时工作流
 ├── workbuddy_daily.py           # 国内版主脚本（签到/任务/玩法，单文件自包含）
 ├── workbuddy_login.py           # 国内版登录工具（短信验证码换 Token）
-├── workbuddy_intl_daily.py      # 国际版每日活跃脚本
+├── workbuddy_intl_daily.py      # 国际版每日活跃 + 只读等级任务状态
 ├── workbuddy_intl_login.py      # 国际版设备授权登录工具
 ├── credits_report.py            # 可选：积分余额与到期报告
 ├── daily_forward.py             # 可选：签到日志重建与转发
@@ -709,7 +755,7 @@ available for personal users」（2026-10-07 实测口径）。脚本会**自动
 ---
 
 ## 📦 版本与发布
-- **当前发布版**：`v53`（2026-11-19，登录工具 AT/RT 结构校验）· **脚本版本**：`v3.51` · **登录工具**：`v2.1`
+- **当前发布版**：`v58`（2026-11-24，国际版任务文档口径统一）· **脚本版本**：`v3.55` · **登录工具**：`v2.1`
 
 - **每次更新单独发一个 Release**：编号 `v1` → `v2` → `v3` …依次递增，**历史版本保留可下载，不覆盖、不合并**（方便回看与回退）
 

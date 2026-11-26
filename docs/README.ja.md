@@ -20,7 +20,7 @@
 
 - `workbuddy_daily.py`: 中国版のデイリータスク、ミニプログラム、ゲーム、レポート。
 - `workbuddy_login.py`: SMS ログインで `phone:AT:RT` を出力。
-- `workbuddy_intl_daily.py`: 国際版デイリーアクティビティとキープアライブ。
+- `workbuddy_intl_daily.py`: 国際版デイリーアクティビティ、キープアライブ、読み取り専用のレベルタスク状態。
 - `workbuddy_intl_login.py`: 国際版のデバイス認可ログイン。
 - `credits_report.py`: クレジット残高と有効期限の任意レポート。
 
@@ -64,6 +64,8 @@ python workbuddy_intl_daily.py
 ```
 
 中国版と国際版のログイン状態は互換性がありません。
+国際版のレベルタスクは既定で読み取り専用です。公式 provider は `growth` を未対応としているため、完了イベントを捏造しません。
+既定ではこれら 5 項目を読み取って状態を確認するだけです。`wechat_linked` は公式クライアントでの WeChat 連携が必要です。`--experimental-intl-tasks` を指定した場合のみ `first_chat`、`skill_installed`、`expert_summoned`、`template_used` を試行して再取得しますが、イベント受信は決済を意味しません。`--no-tasks` で 5 項目をスキップできます。
 
 ## 主な環境変数
 
